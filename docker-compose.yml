@@ -1,0 +1,31 @@
+services:
+  grott:
+    image: ledidobe/grott
+    networks:
+      - net
+    restart: always
+    ports:
+      - 5279:5279
+    environment:
+      - gmqttip=172.18.1.10
+
+  mqtt:
+    image: eclipse-mosquitto
+    restart: always
+    networks:
+      net:
+         ipv4_address: 172.18.1.10
+    ports:
+      - 1883:1883
+      - 9001:9001
+    volumes:
+      - ./mqtt/config:/mosquitto/config
+      - ./mqtt/data:/mosquitto/data
+      - ./mqtt/log:/mosquitto/log
+
+networks:
+  net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.18.1.0/24
