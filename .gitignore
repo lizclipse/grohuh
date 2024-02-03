@@ -2,3 +2,9 @@ mqtt/config/*
 mqtt/data/*
 mqtt/log/*
 !mqtt/config/mosquitto.conf
+db/*
+
+
+# Added by cargo
+
+/target
