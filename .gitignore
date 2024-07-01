@@ -8,3 +8,5 @@ db/*
 # Added by cargo
 
 /target
+
+/history.txt

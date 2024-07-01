@@ -1,15 +1,26 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use surrealdb::{
     engine::remote::ws::{self, Ws},
     Surreal,
 };
+use tokio::time::sleep;
 use ulid::Ulid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    while let Err(err) = ingest().await {
+        eprintln!("Failed to run loop = {:#?}", err);
+        sleep(Duration::from_secs(5)).await;
+    }
+
+    Ok(())
+}
+
+async fn ingest() -> anyhow::Result<()> {
     let db = Surreal::new::<Ws>("localhost:37002").await?;
     db.use_ns("dev").use_db("grohuh").await?;
 
@@ -33,7 +44,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 }
-
 async fn ingest_msg(db: &Surreal<ws::Client>, msg: rumqttc::Publish) -> anyhow::Result<()> {
     println!("Received = {:#?}", msg);
     let msg: GrowattMessage = serde_json::from_slice(&msg.payload)?;
@@ -117,7 +127,7 @@ pub struct GrowattMessage {
     buffered: String,
     device: String,
     time: String,
-    values: Readings,
+    values: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -126,7 +136,7 @@ pub struct DataRecord {
     device: String,
     time: String,
     #[serde(flatten)]
-    values: Readings,
+    values: HashMap<String, Value>,
 }
 
 impl From<GrowattMessage> for DataRecord {
