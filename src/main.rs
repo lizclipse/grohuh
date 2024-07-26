@@ -15,7 +15,8 @@ static TBL_KV: &'static str = "kv";
 
 static KV_STATE: &'static str = "state";
 
-const SOC_TRIGGER: i64 = 90;
+const SOC_TRIGGER_HIGH: i64 = 90;
+const SOC_TRIGGER_LOW: i64 = 80;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -49,16 +50,12 @@ async fn ingest() -> anyhow::Result<()> {
                     println!("Ingsted");
 
                     println!("SOC: {soc:?}");
-                    match (state.soc, soc) {
-                        (Some(prev_soc), Some(curr_soc))
-                            if prev_soc < SOC_TRIGGER && curr_soc >= SOC_TRIGGER =>
-                        {
-                            match Command::new("./soc_trigger")
-                                .arg(curr_soc.to_string())
-                                .status()
-                            {
+                    match (state.triggered.unwrap_or(false), soc) {
+                        (false, Some(soc)) if soc >= SOC_TRIGGER_HIGH => {
+                            match Command::new("./soc_trigger").arg(soc.to_string()).status() {
                                 Ok(status) if status.success() => {
                                     println!("SOC trigger ran");
+                                    state.triggered = Some(true);
                                 }
                                 Ok(status) => {
                                     eprintln!("SOC trigger script failed to run: status={status}");
@@ -68,9 +65,12 @@ async fn ingest() -> anyhow::Result<()> {
                                 }
                             }
                         }
+                        (true, Some(soc)) if soc < SOC_TRIGGER_LOW => {
+                            state.triggered = Some(false);
+                            println!("SOC trigger released");
+                        }
                         _ => (),
                     }
-                    state.soc = soc;
 
                     let res: Result<Option<State>, surrealdb::Error> =
                         db.update((TBL_KV, KV_STATE)).content(&state).await;
@@ -108,7 +108,7 @@ struct Tracking {
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 struct State {
-    soc: Option<i64>,
+    triggered: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
