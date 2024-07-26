@@ -3,5 +3,5 @@
 export def main [percent: number] {
   const shortcut_name = $"Notify PV battery"
 
-  ^open $"shortcuts://run-shortcut?name=($shortcut_name | url encode)&input=text&text=($percent | into string | url encode)"
+  ^open -g $"shortcuts://run-shortcut?name=($shortcut_name | url encode)&input=text&text=($percent | into string | url encode)"
 }
