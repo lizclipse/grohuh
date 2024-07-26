@@ -8,6 +8,8 @@ services:
       - "5279:5279"
     environment:
       - gmqttip=172.18.1.10
+      - ginvtype=sph
+      - ggrowattip=47.254.130.145
 
   mqtt:
     image: eclipse-mosquitto

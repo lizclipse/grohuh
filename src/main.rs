@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, process::Command, time::Duration};
 
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,13 @@ use surrealdb::{
 };
 use tokio::time::sleep;
 use ulid::Ulid;
+
+static TBL_DATA: &'static str = "data";
+static TBL_KV: &'static str = "kv";
+
+static KV_STATE: &'static str = "state";
+
+const SOC_TRIGGER: i64 = 90;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,30 +37,78 @@ async fn ingest() -> anyhow::Result<()> {
     let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
     client.subscribe("energy/growatt", QoS::ExactlyOnce).await?;
 
+    let state: Option<State> = db.select((TBL_KV, KV_STATE)).await?;
+    let mut state = state.unwrap_or_else(|| State::default());
+    println!("{state:?}");
+
     loop {
         let notification = eventloop.poll().await;
         if let Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(msg))) = notification {
             match ingest_msg(&db, msg).await {
-                Ok(_) => {
-                    println!("Ingested");
+                Ok(Tracking { soc }) => {
+                    println!("Ingsted");
+
+                    println!("SOC: {soc:?}");
+                    match (state.soc, soc) {
+                        (Some(prev_soc), Some(curr_soc))
+                            if prev_soc < SOC_TRIGGER && curr_soc >= SOC_TRIGGER =>
+                        {
+                            match Command::new("./soc_trigger")
+                                .arg(curr_soc.to_string())
+                                .status()
+                            {
+                                Ok(status) if status.success() => {
+                                    println!("SOC trigger ran");
+                                }
+                                Ok(status) => {
+                                    eprintln!("SOC trigger script failed to run: status={status}");
+                                }
+                                Err(err) => {
+                                    eprintln!("SOC trigger script failed to run: {err:#?}");
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                    state.soc = soc;
+
+                    let res: Result<Option<State>, surrealdb::Error> =
+                        db.update((TBL_KV, KV_STATE)).content(&state).await;
+
+                    if let Err(err) = res {
+                        eprintln!("Failed to update state: {err:#?}");
+                    }
                 }
                 Err(err) => {
-                    eprintln!("Failed to ingest = {:#?}", err);
+                    eprintln!("Failed to ingest = {err:#?}");
                 }
             }
         }
     }
 }
-async fn ingest_msg(db: &Surreal<ws::Client>, msg: rumqttc::Publish) -> anyhow::Result<()> {
-    println!("Received = {:#?}", msg);
+
+async fn ingest_msg(db: &Surreal<ws::Client>, msg: rumqttc::Publish) -> anyhow::Result<Tracking> {
+    println!("Received = {msg:#?}");
     let msg: GrowattMessage = serde_json::from_slice(&msg.payload)?;
     let msg: DataRecord = msg.into();
     let _: Option<DataRecord> = db
-        .create(("data", Ulid::new().to_string().to_ascii_lowercase()))
-        .content(msg)
+        .create((TBL_DATA, Ulid::new().to_string().to_ascii_lowercase()))
+        .content(&msg)
         .await?;
 
-    Ok(())
+    Ok(Tracking {
+        soc: msg.values.get("SOC").and_then(|v| v.as_i64()),
+    })
+}
+
+#[derive(Debug, Clone)]
+struct Tracking {
+    soc: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+struct State {
+    soc: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
