@@ -1,4 +1,4 @@
-#!/usr/bin/env -S nu
+#!/usr/bin/env -S /opt/homebrew/bin/nu -l
 
 export def main [percent: number] {
   const shortcut_name = $"Notify PV battery"

@@ -49,7 +49,7 @@ async fn ingest() -> anyhow::Result<()> {
                 Ok(Tracking { soc }) => {
                     println!("Ingsted");
 
-                    println!("SOC: {soc:?}");
+                    println!("SOC: {soc:?}, triggered: {:?}", state.triggered);
                     match (state.triggered.unwrap_or(false), soc) {
                         (false, Some(soc)) if soc >= SOC_TRIGGER_HIGH => {
                             match Command::new("./soc_trigger").arg(soc.to_string()).status() {
