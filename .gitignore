@@ -3,6 +3,8 @@ mqtt/data/*
 mqtt/log/*
 !mqtt/config/mosquitto.conf
 db/*
+db-*/
+.DS_Store
 
 
 # Added by cargo

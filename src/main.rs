@@ -4,8 +4,8 @@ use rumqttc::{AsyncClient, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use surrealdb::{
-    engine::remote::ws::{self, Ws},
     Surreal,
+    engine::remote::ws::{self, Ws},
 };
 use tokio::time::sleep;
 use ulid::Ulid;
@@ -73,7 +73,7 @@ async fn ingest() -> anyhow::Result<()> {
                     }
 
                     let res: Result<Option<State>, surrealdb::Error> =
-                        db.update((TBL_KV, KV_STATE)).content(&state).await;
+                        db.update((TBL_KV, KV_STATE)).content(state.clone()).await;
 
                     if let Err(err) = res {
                         eprintln!("Failed to update state: {err:#?}");
@@ -91,14 +91,13 @@ async fn ingest_msg(db: &Surreal<ws::Client>, msg: rumqttc::Publish) -> anyhow::
     println!("Received = {msg:#?}");
     let msg: GrowattMessage = serde_json::from_slice(&msg.payload)?;
     let msg: DataRecord = msg.into();
+    let soc = msg.values.get("SOC").and_then(|v| v.as_i64());
     let _: Option<DataRecord> = db
         .create((TBL_DATA, Ulid::new().to_string().to_ascii_lowercase()))
-        .content(&msg)
+        .content(msg)
         .await?;
 
-    Ok(Tracking {
-        soc: msg.values.get("SOC").and_then(|v| v.as_i64()),
-    })
+    Ok(Tracking { soc })
 }
 
 #[derive(Debug, Clone)]

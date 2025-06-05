@@ -1,22 +1,22 @@
 services:
   grott:
-    image: ledidobe/grott
+    image: ledidobe/grott:2.8.3
     networks:
       - net
     restart: always
     ports:
       - "5279:5279"
     environment:
-      - gmqttip=172.18.1.10
+      - gmqttip=10.0.10.10
       - ginvtype=sph
       - ggrowattip=47.254.130.145
 
   mqtt:
-    image: eclipse-mosquitto
+    image: eclipse-mosquitto:2
     restart: always
     networks:
       net:
-         ipv4_address: 172.18.1.10
+         ipv4_address: 10.0.10.10
     ports:
       - "37000:1883"
       - "37001:9001"
@@ -26,8 +26,8 @@ services:
       - ./mqtt/log:/mosquitto/log
 
   surreal:
-    image: surrealdb/surrealdb
-    command: start file:/data/store.db
+    image: surrealdb/surrealdb:v2
+    command: start rocksdb:/data/store.db
     restart: always
     ports:
       - "37002:8000"
@@ -39,4 +39,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.18.1.0/24
+        - subnet: 10.0.10.0/24
